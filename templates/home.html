@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>หน้าหลัก - ระบบ Export Excel</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border: none;
+            border-radius: 15px;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 25px;
+            padding: 10px 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .navbar {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        .stats-card {
+            background: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+                <i class="fas fa-file-excel text-success me-2"></i>
+                ระบบ Export Excel
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">
+                    <i class="fas fa-user me-1"></i>
+                    {{ session.username }}
+                </span>
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt me-1"></i>
+                    ออกจากระบบ
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-white mb-4">
+                    <i class="fas fa-home me-2"></i>หน้าหลัก
+                </h1>
+            </div>
+        </div>
+
+        <!-- สถิติและปุ่มควบคุม -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="stats-card text-center">
+                    <div class="stats-number">{{ total_products }}</div>
+                    <div class="text-muted">จำนวนสินค้าทั้งหมด</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stats-card">
+                    <div class="row align-items-center">
+                        <div class="col-12 text-center">
+                            <h5 class="mb-3">
+                                <i class="fas fa-download me-2"></i>สร้างไฟล์ Excel
+                            </h5>
+                            <!-- <button class="btn btn-outline-secondary me-2" onclick="testConnection()">
+                                <i class="fas fa-plug me-1"></i>ทดสอบการเชื่อมต่อ
+                            </button> -->
+                            <button class="btn btn-outline-primary me-2" onclick="refreshData()">
+                                <i class="fas fa-sync me-1"></i>รีเฟรชข้อมูล
+                            </button>
+                            <a href="{{ url_for('generate_excel') }}" class="btn btn-primary">
+                                <i class="fas fa-file-excel me-1"></i>สร้างไฟล์ Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ข้อมูลสินค้าจัดกลุ่มตามหมวดหมู่ -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-boxes me-2"></i>รายการสินค้าจัดตามหมวดหมู่
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if grouped_products %}
+                            {% for category, category_products in grouped_products.items() %}
+                            <div class="mb-4">
+                                <h6 class="text-primary border-bottom pb-2 mb-3">
+                                    <i class="fas fa-tag me-2"></i>{{ category }}
+                                    <span class="badge bg-primary ms-2">{{ category_products|length }} รายการ</span>
+                                </h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 15%;">รหัสสินค้า</th>
+                                                <th style="width: 50%;">ชื่อสินค้า</th>
+                                                <th style="width: 20%; text-align: right;">ราคา (บาท)</th>
+                                                <th style="width: 15%; text-align: center;">สถานะ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for product in category_products %}
+                                            <tr>
+                                                <td style="width: 15%;">{{ product.product_code }}</td>
+                                                <td style="width: 50%;">{{ product.product_name }}</td>
+                                                <td style="width: 20%; text-align: right;">{{ "{:,.2f}".format(product.unit_price) }}</td>
+                                                <td style="width: 15%; text-align: center;">
+                                                    <span class="badge bg-success">{{ product.status }}</span>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">ไม่พบข้อมูลสินค้า</h5>
+                                <p class="text-muted">กรุณาตรวจสอบการเชื่อมต่อฐานข้อมูล</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Modal -->
+        <div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-body text-center py-5">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5>กำลังดำเนินการ...</h5>
+                        <p class="text-muted">กรุณารอสักครู่</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function testConnection() {
+            const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            loadingModal.show();
+            
+            fetch('/test_connection')
+                .then(response => response.json())
+                .then(data => {
+                    loadingModal.hide();
+                    if (data.success) {
+                        showAlert('success', data.message);
+                    } else {
+                        showAlert('danger', data.message);
+                    }
+                })
+                .catch(error => {
+                    loadingModal.hide();
+                    showAlert('danger', 'เกิดข้อผิดพลาด: ' + error.message);
+                });
+        }
+        
+        function refreshData() {
+            const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            loadingModal.show();
+            
+            fetch('/refresh_data')
+                .then(response => response.json())
+                .then(data => {
+                    loadingModal.hide();
+                    if (data.success) {
+                        location.reload();
+                        showAlert('success', 'รีเฟรชข้อมูลสำเร็จ');
+                    } else {
+                        showAlert('danger', data.message);
+                    }
+                })
+                .catch(error => {
+                    loadingModal.hide();
+                    showAlert('danger', 'เกิดข้อผิดพลาด: ' + error.message);
+                });
+        }
+        
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+        
+        const generateExcelBtn = document.querySelector('a[href="{{ url_for("generate_excel") }}"]');
+        if (generateExcelBtn) {
+            generateExcelBtn.addEventListener('click', function(e) {
+                const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+                loadingModal.show();
+                
+                setTimeout(function() {
+                    loadingModal.hide();
+                }, 3000);
+            });
+        }
+    </script>
+</body>
+</html>
